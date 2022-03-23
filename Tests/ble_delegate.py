@@ -2,11 +2,14 @@ from bluepy import btle
 import struct, os
 from concurrent import futures
 
-global addr_var
+global macs_from_devices
 global delegate_global
 global perif_global
 
-addr_var = ["30:ae:a4:86:a6:06"]
+macs_from_devices = ["30:ae:a4:86:a6:06", "9c:9c:1f:e8:e5:a2"]
+
+SERVICE_UUID = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
+CHAR_UUID = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
 
 class MyDelegate(btle.DefaultDelegate):
 
@@ -16,28 +19,31 @@ class MyDelegate(btle.DefaultDelegate):
         print("Created delegate for handle, {0}".format(handle))
 
     def handleNotification(self, cHandle, data):
-        global addr_var
+        global macs_from_devices
         global delegate_global
-
-        for ii in range(len(addr_var)):
-            if delegate_global[ii]==self:
+        
+        for mac in range(len(macs_from_devices)):
+                
+            if delegate_global[mac] == self:
                 try:
-                    data_decoded = struct.unpack("b",data)
-                    perif_global[ii].writeCharacteristic(cHandle,struct.pack("b",55))
-                    print("Address: "+addr_var[ii])
-                    print(data_decoded)
+                    print("Entrei")
                     return
                 except:                    
                     pass
+                return
                 try:
-                    data_decoded = data.decode('utf-8')
-                    perif_global[ii].writeCharacteristic(cHandle,struct.pack("b",55))
-                    print("Address: "+addr_var[ii])
-                    print(data_decoded)
+                    print("Entrei")
                     return
                 except:
-                    return
+                    pass
+                return
 
+#data_decoded = struct.unpack("b", data)
+ #                   perif_global[mac].writeCharacteristic(cHandle,struct.pack("b", 55))
+ #                   print("Address: "+addr_var[mac])
+  #                  print(data_decoded)
+
+    
     
 def perif_loop(perif,indx):
     while True:
@@ -52,11 +58,6 @@ def perif_loop(perif,indx):
                 pass
             print("disconnecting perif: "+perif.addr+", index: "+str(indx))
             reestablish_connection(perif,perif.addr,indx)
-            
-delegate_global = []
-perif_global = []
-[delegate_global.append(0) for ii in range(len(addr_var))]
-[perif_global.append(0) for ii in range(len(addr_var))]
 
 def reestablish_connection(perif,addr,indx):
     while True:
@@ -68,27 +69,34 @@ def reestablish_connection(perif,addr,indx):
         except:
             continue
 
-def establish_connection(addr):
+delegate_global = []
+perif_global = []
+[delegate_global.append(0) for mac in range(len(macs_from_devices))]
+[perif_global.append(0) for mac in range(len(macs_from_devices))]
+
+def new_node(addr):
     global delegate_global
     global perif_global
-    global addr_var
+    global macs_from_devices
 
     while True:
         try:
-            for jj in range(len(addr_var)):
-                if addr_var[jj]==addr:
-                    print("Attempting to connect with "+addr+" at index: "+str(jj))
-                    p = btle.Peripheral(addr)
-                    perif_global[jj] = p
+            for mac in range(len(macs_from_devices)):
+                if macs_from_devices[mac] == addr:
+                    print("Attempting to connect with "+addr+" at index: "+str(mac))
+                    node = btle.Peripheral(addr)
+                    perif_global[mac] = node
                     p_delegate = MyDelegate(addr)
-                    delegate_global[jj] = p_delegate
+                    delegate_global[mac] = p_delegate
                     p.withDelegate(p_delegate)
-                    print("Connected to "+addr+" at index: "+str(jj))                    
-                    perif_loop(p,jj)
+                    print("Connected to "+addr+" at index: "+str(mac))                    
+                    perif_loop(node, mac)
         except:
-            print("failed to connect to "+addr)
-            continue
+            check_output("sudo hciconfig hci0 down",shell=True).decode()
+            check_output("sudo hciconfig hci0 up",shell=True).decode()
+            print("failed to connect to {0}".format(addr))
+
 
 
 ex = futures.ProcessPoolExecutor(max_workers = os.cpu_count())
-results = ex.map(establish_connection,addr_var)
+results = ex.map(new_node, macs_from_devices)
